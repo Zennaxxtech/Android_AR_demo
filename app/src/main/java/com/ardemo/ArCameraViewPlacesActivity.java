@@ -1,6 +1,7 @@
 package com.ardemo;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
@@ -9,7 +10,9 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.location.Criteria;
 import android.location.Location;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -73,6 +76,7 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 import static android.graphics.Paint.ANTI_ALIAS_FLAG;
 
+@SuppressLint("LongLogTag")
 public class ArCameraViewPlacesActivity extends FragmentActivity implements GoogleApiClient.ConnectionCallbacks
     ,GoogleApiClient.OnConnectionFailedListener,OnClickBeyondarObjectListener,
         OnTouchBeyondarViewListenerMod {
@@ -81,10 +85,14 @@ public class ArCameraViewPlacesActivity extends FragmentActivity implements Goog
 
     private TextView textView;
     private Location mLastLocation;
+    private LocationManager locationManager;
     private GoogleApiClient mGoogleApiClient;
     private LayoutInflater layoutInflater;
     private ArFragmentSupport arFragmentSupport;
     private World world;
+
+    boolean gps_enabled = false;
+    boolean network_enabled = false;
 
     @BindView(R.id.poi_place_detail)
     CardView poi_cardview;
@@ -112,6 +120,8 @@ public class ArCameraViewPlacesActivity extends FragmentActivity implements Goog
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_poi_browser);
         ButterKnife.bind(this);
+
+        locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
 
         seekbar_cardview.setVisibility(View.GONE);
         poi_browser_progress.setVisibility(View.GONE);
@@ -144,14 +154,23 @@ public class ArCameraViewPlacesActivity extends FragmentActivity implements Goog
             }
         });
 
+        if(getIntent()!=null) {
+            Intent intent = getIntent();
+
+            double lat = intent.getDoubleExtra("lat",0);
+            double lng = intent.getDoubleExtra("lng",0);
+
+            Poi_list_call(lat, lng, 1500);
+        }
+
         seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
 
                 if(i==0){
-                    Poi_list_call(300);
+                    //Poi_list_call(300);
                 }else{
-                    Poi_list_call((i+1)*300);
+                   // Poi_list_call((i+1)*300);
                 }
 
             }
@@ -170,11 +189,12 @@ public class ArCameraViewPlacesActivity extends FragmentActivity implements Goog
                 }
             }
         });
-
     }
 
-    void Poi_list_call(int radius){
+    void Poi_list_call(final double lat, final double log, int radius){
         Log.d(TAG, "Poi_list_call: radius" +radius);
+        Log.d(TAG, "onConnected: mLastLocation.getLatitude()"+ lat + " ,mLastLocation.getLongitude()"+ log);
+
         poi_browser_progress.setVisibility(View.VISIBLE);
         HttpLoggingInterceptor interceptor = new HttpLoggingInterceptor();
         interceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
@@ -189,8 +209,8 @@ public class ArCameraViewPlacesActivity extends FragmentActivity implements Goog
         RetrofitInterface apiService =
                 retrofit.create(RetrofitInterface.class);
 
-        final Call<PoiResponse> call = apiService.listPOI(String.valueOf(mLastLocation.getLatitude())+","+
-                String.valueOf(mLastLocation.getLongitude()),radius,
+        final Call<PoiResponse> call = apiService.listPOI(String.valueOf(lat)+","+
+                String.valueOf(log),radius,
                 getResources().getString(R.string.google_maps_key));
 
         call.enqueue(new Callback<PoiResponse>() {
@@ -202,7 +222,7 @@ public class ArCameraViewPlacesActivity extends FragmentActivity implements Goog
 
                 List<Result> poiResult=response.body().getResults();
 
-                Configure_AR(poiResult);
+                Configure_AR(lat, log, poiResult);
             }
 
             @Override
@@ -340,12 +360,12 @@ public class ArCameraViewPlacesActivity extends FragmentActivity implements Goog
         }
     }
 
-    private void Configure_AR(List<Result> pois){
+    private void Configure_AR(double lat, double log, List<Result> pois){
 
         layoutInflater=getLayoutInflater();
 
         world=new World(getApplicationContext());
-        world.setGeoPosition(mLastLocation.getLatitude(),mLastLocation.getLongitude());
+        world.setGeoPosition(lat,log);
         world.setDefaultImage(R.drawable.ar_sphere_default);
 
         arFragmentSupport.getGLSurfaceView().setPullCloserDistance(25);
@@ -372,7 +392,7 @@ public class ArCameraViewPlacesActivity extends FragmentActivity implements Goog
 
             name.setText(pois.get(i).getName());
             String distance= String.valueOf((SphericalUtil.computeDistanceBetween(
-                    new LatLng(mLastLocation.getLatitude(),mLastLocation.getLongitude()),
+                    new LatLng(lat,log),
                     new LatLng(pois.get(i).getGeometry().getLocation().getLat(),
                             pois.get(i).getGeometry().getLocation().getLng())))/1000);
             String d=distance+" KM";
@@ -538,24 +558,50 @@ public class ArCameraViewPlacesActivity extends FragmentActivity implements Goog
         mGoogleApiClient.disconnect();
         super.onStop();
     }
+
 //
     @Override
     public void onConnected(@Nullable Bundle bundle) {
+        Log.d(TAG, "onConnected: called");
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.ACCESS_FINE_LOCATION},1);
-        }
-        else {
+        } else {
             mLastLocation = LocationServices.FusedLocationApi.getLastLocation(
                     mGoogleApiClient);
             if (mLastLocation != null) {
                 try {
+                    //Poi_list_call(1500);
+                    double lat = mLastLocation.getLatitude();
+                    double lng = mLastLocation.getLongitude();
+
+                    Poi_list_call(lat, lng, 1500);
+
+                }catch (Exception e){
+                    Log.d(TAG, "onConnected: Intent Error");
+                }
+            }else{
+                Log.d(TAG, "mLastLocation: is null");
+            }
+
+           /* gps_enabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+            network_enabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+
+            if (gps_enabled)
+                 mLastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (network_enabled)
+                mLastLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+
+            if (mLastLocation != null) {
+                try {
                     Poi_list_call(1500);
+
                 }catch (Exception e){
                     Log.d(TAG, "onCreate: Intent Error");
                 }
-            }
+            }*/
+
         }
 
     }

@@ -300,7 +300,7 @@ public class ArFragmentSupport extends Fragment implements FpsUpdatable,OnClickL
      */
     public void setWorld(World world) {
         try {
-            checkIfSensorsAvailable();
+            //checkIfSensorsAvailable();
         } catch (IllegalStateException e) {
             throw e;
         }

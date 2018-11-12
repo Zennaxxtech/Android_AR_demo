@@ -74,6 +74,9 @@ public class CameraActivity extends FragmentActivity implements GoogleApiClient.
     private ArFragmentSupport arFragmentSupport;
     private World world;
 
+    boolean gps_enabled = false;
+    boolean network_enabled = false;
+
     private Intent intent;
 
     @Override
@@ -356,6 +359,7 @@ public class CameraActivity extends FragmentActivity implements GoogleApiClient.
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
+        Log.d(TAG, "onConnected: called");
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
@@ -363,20 +367,28 @@ public class CameraActivity extends FragmentActivity implements GoogleApiClient.
 
         }
         else {
-            locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
-            String locationProvider = LocationManager.NETWORK_PROVIDER;
+           /* locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
 
-           // mLastLocation = locationManager.getLastKnownLocation(locationProvider);
+            gps_enabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+            network_enabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+
+            if (gps_enabled)
+                mLastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (network_enabled)
+                mLastLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);*/
 
             mLastLocation = LocationServices.FusedLocationApi.getLastLocation(
                     mGoogleApiClient);
 
             if (mLastLocation != null) {
+                Log.d(TAG, "mLastLocation: not null");
                 try {
                     Get_intent(); //Fetch Intent Values
                 }catch (Exception e){
                     Log.d(TAG, "onCreate: Intent Error");
                 }
+            }else{
+                Log.d(TAG, "mLastLocation: is null");
             }
         }
 
